@@ -51,14 +51,7 @@ hash_t* hash_crear(hash_destruir_dato_t destruir_dato) {
     hash->cantidad = 0;
     hash->capacidad = CAPACIDAD_INICIAL;
     for(int i=0; i< hash->capacidad; i++){
-        hash->tabla[i] = malloc(sizeof(campo_t));
-        if(hash->tabla[i] == NULL){
-            free(hash->tabla);
-            free(hash);
-            return NULL;
-        }
-        hash->tabla[i]->estado = VACIO;
-        hash->tabla[i]->clave = NULL;
+        hash->tabla[i] = NULL;
     }
     hash->destruir = destruir_dato;
     return hash;
@@ -70,21 +63,17 @@ bool hash_redimensionar(hash_t* hash, size_t tam_nuevo){
         return false;
     }
     for(int i=0; i< tam_nuevo; i++){
-        tabla_nueva[i] = malloc(sizeof(campo_t));
-        if(tabla_nueva[i] == NULL){
-            free(tabla_nueva);
-            return false;
-        }
-        tabla_nueva[i]->estado = VACIO;
-        tabla_nueva[i]->clave = NULL;
+        tabla_nueva[i] =  NULL;
     }
     for (int i = 0; i < hash->capacidad; i++) {
-		if (hash->tabla[i]->estado == OCUPADO) {		
-			size_t pos = funcion_hash(tam_nuevo, hash->tabla[i]->clave);
-			tabla_nueva[pos] = hash->tabla[i];
-		}else{
-            free(hash->tabla[i]->clave);
-            free(hash->tabla[i]);
+        if(hash->tabla[i] != NULL){
+            if (hash->tabla[i]->estado == OCUPADO) {		
+			    size_t pos = funcion_hash(tam_nuevo, hash->tabla[i]->clave);
+			    tabla_nueva[pos] = hash->tabla[i];
+		    }else{
+                free(hash->tabla[i]->clave);
+                free(hash->tabla[i]);
+            }
         }
 	}
 	campo_t** aux = hash->tabla;
@@ -109,13 +98,18 @@ bool hash_guardar(hash_t* hash, const char* clave, void* dato){
             return false;
         }
     }
-    hash->tabla[posicion]->valor = dato;
+    campo_t* campo = malloc(sizeof(campo_t));
+    if(campo == NULL){
+        return false;
+    }
+    campo->valor = dato;
     char* copia_clave = strdup(clave);
     if(copia_clave == NULL){
         return NULL;
     } 
-    hash->tabla[posicion]->clave = copia_clave;
-    hash->tabla[posicion]->estado = OCUPADO;
+    campo->clave = copia_clave;
+    campo->estado = OCUPADO;
+    hash->tabla[posicion]= campo;
     hash->cantidad++;
     return true;
 }
@@ -143,15 +137,17 @@ size_t hash_cantidad(const hash_t* hash) {
 
 void hash_destruir(hash_t* hash) {
     for (int i = 0; i < hash->capacidad; i++) {
-        if(hash->tabla[i]->clave !=NULL){
-            if (hash->destruir != NULL) { 
-                hash->destruir(hash->tabla[i]->valor);
-                hash->destruir(hash->tabla[i]->clave);
-            } else {
-                free(hash->tabla[i]->clave);
+        if(hash->tabla[i] != NULL){
+            if(hash->tabla[i]->clave !=NULL){
+                if (hash->destruir != NULL) { 
+                    hash->destruir(hash->tabla[i]->valor);
+                    hash->destruir(hash->tabla[i]->clave);
+                } else {
+                    free(hash->tabla[i]->clave);
+                }
             }
+            free(hash->tabla[i]);
         }
-        free(hash->tabla[i]);
     }
     free(hash->tabla);
     free(hash);
@@ -163,7 +159,7 @@ bool hash_pertenece(const hash_t* hash, const char* clave) {
     }
     unsigned long pos_en_hash = funcion_hash(hash->capacidad, clave);
     campo_t* campo = hash->tabla[pos_en_hash];
-    return campo->estado == OCUPADO && strcmp(campo->clave, clave) == 0 ; 
+    return campo != NULL && campo->estado == OCUPADO && strcmp(campo->clave, clave) == 0 ; 
 }
 
 void* hash_obtener(const hash_t* hash, const char* clave) {
@@ -200,7 +196,7 @@ const char* hash_iter_ver_actual(const hash_iter_t* iter) {
 }
 
 bool hash_iter_al_final(const hash_iter_t* iter) {
-    return iter->recorridos == hash_cantidad(iter->hash);
+    return iter->recorridos == hash_cantidad(iter->hash) || iter->posicion == iter->hash->capacidad;
 }
 
 void hash_iter_destruir(hash_iter_t* iter) {
@@ -210,7 +206,7 @@ void hash_iter_destruir(hash_iter_t* iter) {
 bool hash_iter_avanzar(hash_iter_t* iter) { 
     while (!hash_iter_al_final(iter)) {
         iter->posicion++;
-        if (iter->hash->tabla[iter->posicion]->estado == OCUPADO) {
+        if (iter->hash->tabla[iter->posicion] != NULL && iter->hash->tabla[iter->posicion]->estado == OCUPADO) {
             iter->recorridos++;
             return true;
         }
