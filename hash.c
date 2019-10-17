@@ -43,6 +43,42 @@ unsigned long funcion_hash(size_t capacidad, const char* s) {
     return hash % capacidad;
 }
 
+unsigned long obtener_posicion_insertar(campo_t* tabla, size_t capacidad, unsigned long posicion_original){
+    unsigned long pos = posicion_original;
+    while (pos < capacidad){
+        if(tabla[pos].estado != OCUPADO){
+            return pos;
+        }
+        pos++;
+    }
+    pos = 0;
+    while (pos < posicion_original) {
+        if(tabla[pos].estado != OCUPADO){
+            return pos;
+        }
+        pos++;
+    }
+    return pos;
+}
+
+unsigned long obtener_posicion_insertado(const hash_t* hash, unsigned long posicion_original, const char* clave){
+    unsigned long pos = posicion_original;
+    while (pos < hash->capacidad){
+        if(hash->tabla[pos].estado == OCUPADO && strcmp(hash->tabla[pos].clave, clave) == 0){
+            return pos;
+        }
+        pos++;
+    }
+    pos = 0;
+    while (pos < posicion_original) {
+        if(hash->tabla[pos].estado == OCUPADO && strcmp(hash->tabla[pos].clave, clave) == 0){
+            return pos;
+        }
+        pos++;
+    }
+    return pos;
+}
+
 campo_t* crear_tabla(size_t capacidad){
     campo_t* tabla = malloc(sizeof(campo_t)*capacidad);
     if(tabla == NULL){
@@ -83,7 +119,7 @@ bool hash_redimensionar(hash_t* hash, size_t capacidad){
     }
     for(int i = 0; i < hash->capacidad; i++){
         if(hash->tabla[i].estado == OCUPADO){
-            unsigned long pos = funcion_hash(capacidad, hash->tabla[i].clave);
+            unsigned long pos = obtener_posicion_insertar(nueva_tabla, capacidad, funcion_hash(capacidad, hash->tabla[i].clave));
             nueva_tabla[pos] = hash->tabla[i];
         } 
         if(hash->tabla[i].estado == BORRADO){
@@ -101,7 +137,7 @@ bool hash_redimensionar(hash_t* hash, size_t capacidad){
 bool hash_guardar(hash_t* hash, const char* clave, void* dato){
     unsigned long pos;
     if(hash_pertenece(hash, clave)){
-        pos = funcion_hash(hash->capacidad, clave);
+        pos = obtener_posicion_insertado(hash, funcion_hash(hash->capacidad, clave), clave);
         hash->tabla[pos].valor = dato;
         return true;
     }
@@ -110,7 +146,7 @@ bool hash_guardar(hash_t* hash, const char* clave, void* dato){
             return false;
         }
     }
-    pos = funcion_hash(hash->capacidad, clave);
+    pos = obtener_posicion_insertar(hash->tabla, hash->capacidad, funcion_hash(hash->capacidad, clave));
     hash->tabla[pos].clave = malloc(sizeof(char)*sizeof(clave));
     if(hash->tabla[pos].clave == NULL){
         return false;
@@ -126,7 +162,7 @@ void* hash_borrar(hash_t* hash, const char* clave){
     if(!hash_pertenece(hash, clave)){
         return NULL;
     }
-    unsigned long pos = funcion_hash(hash->capacidad, clave);
+    unsigned long pos = obtener_posicion_insertado(hash,funcion_hash(hash->capacidad, clave), clave);
     void* valor = hash->tabla[pos].valor;
     hash->tabla[pos].estado = BORRADO;
     hash->cantidad--;
@@ -141,13 +177,13 @@ void* hash_obtener(const hash_t* hash, const char* clave){
     if(!hash_pertenece(hash, clave)){
         return NULL;
     }
-    unsigned long pos = funcion_hash(hash->capacidad, clave);
+    unsigned long pos = obtener_posicion_insertado(hash, funcion_hash(hash->capacidad, clave), clave);
     return hash->tabla[pos].valor;
 }
 
 bool hash_pertenece(const hash_t* hash, const char* clave){
-    unsigned long pos = funcion_hash(hash->capacidad, clave);
-    return hash->tabla[pos].estado == OCUPADO;
+    unsigned long pos = obtener_posicion_insertado(hash, funcion_hash(hash->capacidad, clave), clave);
+    return hash->tabla[pos].estado == OCUPADO && strcmp(hash->tabla[pos].clave, clave) == 0;
 }
 
 size_t hash_cantidad(const hash_t* hash){
@@ -158,11 +194,9 @@ void hash_destruir(hash_t* hash){
     for(int i = 0; i < hash->capacidad; i++){
         if(hash->tabla[i].estado != VACIO){
             if(hash->destruir != NULL){
-                hash->destruir(hash->tabla[i].clave);
                 hash->destruir(hash->tabla[i].valor);
-            } else {
-                free(hash->tabla[i].clave);
             }
+            free(hash->tabla[i].clave);
         }   
     }
     free(hash);
@@ -179,6 +213,7 @@ hash_iter_t* hash_iter_crear(const hash_t* hash){
     hash_iter->recorridos = 0;
     hash_iter->hash = hash;
     hash_iter_avanzar(hash_iter);
+    hash_iter->recorridos = 0;
     return hash_iter;
 }
 
@@ -194,7 +229,7 @@ bool hash_iter_avanzar(hash_iter_t* iter){
 }
 
 const char* hash_iter_ver_actual(const hash_iter_t* iter){
-    if (hash_iter_al_final(iter) && iter->hash->tabla[iter->posicion].estado != OCUPADO) {
+    if (hash_iter_al_final(iter) || iter->hash->tabla[iter->posicion].estado != OCUPADO) {
         return NULL;
     }
     return iter->hash->tabla[iter->posicion].clave;
