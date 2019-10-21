@@ -33,6 +33,8 @@ struct hash_iter {
     size_t recorridos;
 };
 
+char *strdup(const char *s1);
+
 // Función de Hash de "The C Programming Language (Second Edition)", Brian Kernighan & Dennis Ritchie, Capítulo 6, Pág. 144.
 unsigned long funcion_hash(size_t capacidad, const char* s) {
     size_t hash = 14695981039346656037U;
@@ -80,7 +82,7 @@ unsigned long obtener_posicion_insertado(const hash_t* hash, unsigned long posic
 }
 
 campo_t* crear_tabla(size_t capacidad){
-    campo_t* tabla = malloc(sizeof(campo_t)*capacidad);
+    campo_t* tabla = malloc(capacidad*sizeof(campo_t));
     if(tabla == NULL){
         return NULL;
     }
@@ -108,8 +110,7 @@ hash_t* hash_crear(hash_destruir_dato_t destruir_dato){
 }
 
 double calcular_factor_carga(hash_t* hash){
-    size_t cantidad_total = hash->cantidad + hash->borrados;
-    return (double)cantidad_total/hash->capacidad;
+    return ((double)(hash->cantidad) + (double)(hash->borrados))/((double)(hash->capacidad));
 }
 
 bool hash_redimensionar(hash_t* hash, size_t capacidad){
@@ -126,10 +127,9 @@ bool hash_redimensionar(hash_t* hash, size_t capacidad){
             free(hash->tabla[i].clave);
         }
     }
-    campo_t* aux = hash->tabla;
+    free(hash->tabla);
 	hash->tabla = nueva_tabla;
 	hash->capacidad = capacidad;
-	free(aux);
     return true;
 
 }
@@ -138,6 +138,9 @@ bool hash_guardar(hash_t* hash, const char* clave, void* dato){
     unsigned long pos;
     if(hash_pertenece(hash, clave)){
         pos = obtener_posicion_insertado(hash, funcion_hash(hash->capacidad, clave), clave);
+        if(hash->destruir != NULL){
+            hash->destruir(hash->tabla[pos].valor);
+        }
         hash->tabla[pos].valor = dato;
         return true;
     }
@@ -147,11 +150,11 @@ bool hash_guardar(hash_t* hash, const char* clave, void* dato){
         }
     }
     pos = obtener_posicion_insertar(hash->tabla, hash->capacidad, funcion_hash(hash->capacidad, clave));
-    hash->tabla[pos].clave = malloc(sizeof(char)*sizeof(clave));
-    if(hash->tabla[pos].clave == NULL){
+    char* copia_clave = strdup(clave);
+    if (copia_clave == NULL) {
         return false;
     }
-    strcpy(hash->tabla[pos].clave, clave);
+    hash->tabla[pos].clave = copia_clave;
     hash->tabla[pos].valor = dato;
     hash->tabla[pos].estado = OCUPADO;
     hash->cantidad++;
@@ -199,6 +202,7 @@ void hash_destruir(hash_t* hash){
             free(hash->tabla[i].clave);
         }   
     }
+    free(hash->tabla);
     free(hash);
 }
 
@@ -219,11 +223,11 @@ hash_iter_t* hash_iter_crear(const hash_t* hash){
 
 bool hash_iter_avanzar(hash_iter_t* iter){
     while(!hash_iter_al_final(iter)){
-        if(iter->hash->tabla[iter->posicion].estado == OCUPADO){
+        iter->posicion++;
+        if(iter->posicion < iter->hash->capacidad && iter->hash->tabla[iter->posicion].estado == OCUPADO){
             iter->recorridos++;
             return true;
         }
-        iter->posicion++;
     }
     return false;
 }
